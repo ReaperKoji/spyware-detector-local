@@ -9,6 +9,11 @@ import shutil
 import tempfile
 import getpass
 import subprocess
+from collections import deque
+
+import psutil
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "core")))
 from core import startup_checker
@@ -177,7 +182,7 @@ class HackerSentinelGUI(tk.Tk):
         super().__init__()
 
         self.title("🛡️ KojiClean - ReaperKoji")
-        self.geometry("1000x650")
+        self.geometry("1000x700")
         self.configure(bg="#0b0b0b")
         self.resizable(False, False)
 
@@ -224,13 +229,29 @@ class HackerSentinelGUI(tk.Tk):
 
         self.log_box = tk.Text(self.main_panel, bg="#000000", fg="#00ff00",
                                font=("Consolas", 11), insertbackground="#00ff00",
-                               wrap="word", borderwidth=0, height=28, width=80)
-        self.log_box.pack(padx=10, pady=10, fill="both", expand=True)
+                               wrap="word", borderwidth=0, height=20, width=80)
+        self.log_box.pack(padx=10, pady=10, fill="both", expand=False)
         self.log_box.config(state="disabled")
 
         self.scrollbar = tk.Scrollbar(self.main_panel, command=self.log_box.yview)
         self.log_box.config(yscrollcommand=self.scrollbar.set)
         self.scrollbar.pack(side="right", fill="y")
+
+        # Gráfico CPU
+        self.cpu_data = deque([0]*30, maxlen=30)
+        self.fig, self.ax = plt.subplots(figsize=(6,2.5))
+        self.line, = self.ax.plot(range(30), list(self.cpu_data), color='lime')
+        self.ax.set_ylim(0, 100)
+        self.ax.set_title("Uso da CPU (%) em tempo real")
+        self.ax.set_xlabel("Segundos atrás")
+        self.ax.set_ylabel("CPU %")
+        self.ax.grid(True, linestyle='--', alpha=0.5)
+
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.main_panel)
+        self.canvas.get_tk_widget().pack(padx=10, pady=5, fill="both", expand=False)
+
+        self.running = True
+        threading.Thread(target=self.update_cpu_usage, daemon=True).start()
 
         self.status_bar = tk.Label(self, text="Status: Pronto", bg="#121212", fg="#00ff00", font=("Consolas", 10))
         self.status_bar.grid(row=1, column=0, columnspan=2, sticky="ew")
@@ -354,6 +375,13 @@ class HackerSentinelGUI(tk.Tk):
     def _toggle_buttons(self, state):
         for btn in self.buttons:
             btn.config(state=state)
+
+    def update_cpu_usage(self):
+        while self.running:
+            cpu_percent = psutil.cpu_percent(interval=1)
+            self.cpu_data.append(cpu_percent)
+            self.line.set_ydata(list(self.cpu_data))
+            self.canvas.draw_idle()
 
 
 if __name__ == "__main__":
